@@ -3,33 +3,39 @@ require 'net/http'
 require 'nokogiri'
 require 'json'
 
-# Some things we'll be storing information in.
-regions = {}
-listings = []
-searchquery = "TDI"
+def get_us_regions()
+  # Accumulator for building up the returned object.
+  results = {}
+  
+  # Important URLs
+  sitelist = URI('http://www.craigslist.org/about/sites')
+  geospatial = URI('http://www.craigslist.org/about/areas.json')
 
-# Parse the US regions out of craigslist's region list.
-results =  Nokogiri::HTML(Net::HTTP.get(URI('http://www.craigslist.org/about/sites'))).search("a[name=US]").first().parent().next_element().search('a')
+  # Get a collection of nodes for the US regions out of craigslist's site list.
+  usregions =  Nokogiri::HTML(Net::HTTP.get(sitelist)).search("a[name=US]").first().parent().next_element().search('a')
 
-# Build a usable representation.
-results.each { |result|
-  hostname = result.attr('href').gsub('http://','').gsub('.craigslist.org','')
-  regions[hostname] = { name: result.content, state: result.parent().parent().previous_element().content }
-}
+  # Parse out the information to build a usable representation.
+  usregions.each { |usregion|
+    hostname = usregion.attr('href').gsub('http://','').gsub('.craigslist.org','')
+    regions[hostname] = { name: result.content, state: result.parent().parent().previous_element().content }
+  }
 
-# Merge that information with craigslist's geographic information.
-areas = JSON.parse(Net::HTTP.get(URI('http://www.craigslist.org/about/areas.json')))
-areas.each { |area|
-  if regions[area["hostname"]]
-    regions[area["hostname"]][:stateabbrev] = area["region"]
-    regions[area["hostname"]][:latitude] = area["lat"]
-    regions[area["hostname"]][:longitude] = area["lon"]
-  end
-}
-# BAM! Full information regarding US regions.
+  # Merge that information with craigslist's geographic information.
+  areas = JSON.parse(Net::HTTP.get(geospatial))
+  areas.each { |area|
+    if regions[area["hostname"]]
+      regions[area["hostname"]][:stateabbrev] = area["region"]
+      regions[area["hostname"]][:latitude] = area["lat"]
+      regions[area["hostname"]][:longitude] = area["lon"]
+    end
+  }
+
+  # This is a complete list of the US regions, keyed off of their hostname.
+  return results
+end
 
 # Perform a search in a particular region.
-def processregion(regionhostname, searchquery)
+def search_region(regionhostname, query)
   # In case there are multiple pages of results from a search
   pages = []
   pagecount = false
@@ -43,7 +49,7 @@ def processregion(regionhostname, searchquery)
     page = pages.length * 100    
 
     # Here is the URL we'll be making the request of.
-    url = URI("http://#{regionhostname}.craigslist.org/search/cto?query=#{searchquery}&srchType=T&s=#{page}")
+    url = URI("http://#{regionhostname}.craigslist.org/search/cto?query=#{query}&srchType=T&s=#{page}")
 
     # Get the response and parse it.
     pages << Nokogiri::HTML(Net::HTTP.get(url))
@@ -129,38 +135,48 @@ def processregion(regionhostname, searchquery)
   return result
 end
 
-# Divide the requests across threads.
-# But not too few or too many threads for optimization.
-iterations = 5
-count = (regions.length/iterations.to_f).ceil
-(0..(iterations-1)).each { |iteration|
-  threads = []
-  # Split the requests by region.
-  regions.keys.slice(iteration*count,count).each { |regionhostname|
-    threads << Thread.new(regionhostname) { |activeregionhostname|
-      # Store the response in an accumulator, of sorts.
-      listings << processregion(activeregionhostname, searchquery)
+def search(query)
+  results = []
+
+  # Get a copy of the regions we're going to search.
+  regions = get_us_regions()
+
+  # Divide the requests to each region across the "right" number of threads.
+  iterations = 5
+  count = (regions.length/iterations.to_f).ceil
+
+  # Spin up the threads!
+  (0..(iterations-1)).each { |iteration|
+    threads = []
+
+    # Split the requests by region.
+    regions.keys.slice(iteration*count,count).each { |regionhostname|
+      threads << Thread.new(regionhostname) { |activeregionhostname|
+        # New block for proper scoping of regionhostname
+        results << search_region(activeregionhostname, query)
+      }
     }
+
+    # Wait until all threads are complete before kicking off the next set.
+    threads.each { |thread| thread.join }
   }
-  # Don't exit until all threads are complete.
-  threads.each { |thread| thread.join }
-}
 
-# From processregion we return an array, which means we need to flatten(1) to pull everything up to the top level.
-listings = listings.flatten(1)
+  # From search_region we return an array, which means we need to flatten(1) to pull everything up to the top level.
+  results = results.flatten(1)
 
-# Sort all listings by date, descending.
-listings.sort! { |a,b|
-  if a["date"] == b["date"]
-    b["id"].to_i <=> a["id"].to_i
-  else
-    b["date"] <=> a["date"]
-  end
-}
+  # Sort the search results by date, descending.
+  results.sort! { |a,b|
+    if a["date"] == b["date"]
+      b["id"].to_i <=> a["id"].to_i
+    else
+      b["date"] <=> a["date"]
+    end
+  }
 
-# Print the results.
-# puts regions.to_json
-puts listings.to_json
+  return results
+end
+
+puts search("TDI").to_json
 
 # time ruby index.rb
 # real  0m18.018s

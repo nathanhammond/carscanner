@@ -17,16 +17,16 @@ def get_us_regions()
   # Parse out the information to build a usable representation.
   usregions.each { |usregion|
     hostname = usregion.attr('href').gsub('http://','').gsub('.craigslist.org','')
-    regions[hostname] = { name: result.content, state: result.parent().parent().previous_element().content }
+    results[hostname] = { name: usregion.content, state: usregion.parent().parent().previous_element().content }
   }
 
   # Merge that information with craigslist's geographic information.
   areas = JSON.parse(Net::HTTP.get(geospatial))
   areas.each { |area|
-    if regions[area["hostname"]]
-      regions[area["hostname"]][:stateabbrev] = area["region"]
-      regions[area["hostname"]][:latitude] = area["lat"]
-      regions[area["hostname"]][:longitude] = area["lon"]
+    if results[area["hostname"]]
+      results[area["hostname"]][:stateabbrev] = area["region"]
+      results[area["hostname"]][:latitude] = area["lat"]
+      results[area["hostname"]][:longitude] = area["lon"]
     end
   }
 
@@ -117,7 +117,7 @@ def search_region(regionhostname, query)
       end
       
       # This stuff needs to be set by user input.
-      car["mileage"] = nil
+      # car["mileage"] = nil
       # car["features"] = {
       #   "automatic": false,
       #   "sunroof": false,
@@ -148,6 +148,11 @@ def search(query)
   # Spin up the threads!
   (0..(iterations-1)).each { |iteration|
     threads = []
+
+    # Protect against source exhaustion
+    if iteration * count > regions.length()
+      next
+    end
 
     # Split the requests by region.
     regions.keys.slice(iteration*count,count).each { |regionhostname|

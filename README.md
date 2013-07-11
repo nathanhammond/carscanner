@@ -1,4 +1,4 @@
 carscanner
 ==========
 
-Simple tool for searching car listings on craigslist.
+Simple tool for searching car postings on craigslist.

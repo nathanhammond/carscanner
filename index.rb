@@ -5,7 +5,7 @@ require 'nokogiri'
 require './ThreadPool'
 require './Continent'
 require './Region'
-require './Listing'
+require './Posting'
 require './Car'
 require './CLScanner'
 
@@ -29,5 +29,5 @@ def haversine(lat1, long1, lat2, long2)
 end
 
 scanner = CLScanner.new 35.23308, -80.805521
-scanner.search("TDI", ["albany", "charlotte"], ["US"])
+scanner.search("TDI", ["charlotte"], ["US"])
 puts scanner

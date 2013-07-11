@@ -1,10 +1,10 @@
 class Car
   attr_reader :year
 
-  def initialize(listing)
+  def initialize(posting)
     @id = nil
-    @listingid = listing.id
-    @year = findyear(listing.description)
+    @postingid = posting.id
+    @year = findyear(posting.description)
     
     # TODO: condition, mileage, features, color(s)...
   end

@@ -7,18 +7,27 @@ class CLScanner
 
   # For bootstrapping.
   def initialize(lat, lon)
+    @continents = {}
+    @regions = {}
+
+    @postings = {}
+    @cars = {}
+
     @lat = lat
     @lon = lon
+
+    # Bootstrap the initial information we need for the scanner.
     @parsedsites = Nokogiri::HTML(Net::HTTP.get(Sites))
     @parsedareas = JSON.parse(Net::HTTP.get(Areas))
-
     loadcontinents
     loadregions
+
+    # Set up a thread pool.
+    @pool = ThreadPool.new(64)
+    at_exit { @pool.shutdown }
   end
 
   def loadcontinents
-    @continents = {}
-    
     # CL conveniently left us a map.
     @parsedsites.search(".jump_to_continents a").each do |element|
       continent = Continent.new element
@@ -27,8 +36,6 @@ class CLScanner
   end
 
   def loadregions
-    @regions = {}
-
     # Build the base with the geospatial file.
     @parsedareas.each do |json|
       region = Region.new(self, json)
@@ -48,10 +55,6 @@ class CLScanner
   end
 
   def search(query, regionswhitelist, continentswhitelist)
-    # Set up a thread pool.
-    @pool = ThreadPool.new(64)
-    at_exit { @pool.shutdown }
-
     # Iterate over each region and push the processing for it into the processing queue.
     @regions.each do |hostname,region|
 
@@ -59,80 +62,62 @@ class CLScanner
       next unless continentswhitelist.include? region.continent unless continentswhitelist.nil?
       next unless regionswhitelist.include? region.id unless regionswhitelist.nil?
 
-      # Throw the function into the pool.
-      @pool.schedule do
-        searchregion(query,region)
-        puts "#{hostname} finished by thread #{Thread.current[:id]+1}"
-      end
+      searchregion(query,region)
     end
-    
-    @pool.shutdown
   end
 
-  # TODO: Clean me up!
-  def searchregion(query, region)
-    @listings = {}
-    @cars = {}
+  def getresultspage(query, region, page = 0)
+    page = page * 100
+    url = URI("http://#{region.id}.craigslist.org/search/cto?query=#{query}&srchType=T&s=#{page}")
+    yield Nokogiri::HTML(Net::HTTP.get(url))
+  end
 
-    # In case there are multiple pages of results from a search
-    pages = []
-    pagecount = false
+  def processresultspage(region, document)
+    document.search('.row').each do |posting|
+      # Skip postings from other regions in case there are any. ("FEW LOCAL RESULTS FOUND")
+      next if posting.search('a[href^=http]').length != 0
+      posting = Posting.new(self, region, posting)
+      car = Car.new(posting)
 
-    # Make requests for every page.
-    while (pages.length != pagecount)
-      # End up with a start of "0" on the first time, 100 is craigslist's page length.
-      page = pages.length * 100    
-
-      # Here is the URL we'll be making the request of.
-      url = URI("http://#{region.id}.craigslist.org/search/cto?query=#{query}&srchType=T&s=#{page}")
-
-      # Get the response and parse it.
-      pages << Nokogiri::HTML(Net::HTTP.get(url))
-
-      # If this is the first time through
-      if (pagecount == false)
-
-        # Check to make sure there are results.
-        if pages.last().search('.resulttotal').length != 0
-          # There are results, and we need to see if additional requests are necessary.
-          pagecount = (pages.last().search('.resulttotal').first.content.gsub(/[^0-9]/,'').to_i / 100.0).ceil
-        end
-      end
+      # TODO: Run a diff on any change.
+      @postings[posting.id] = posting
+      @cars[posting.id] = car
     end
+  end
 
-    # Go through each results page and process the listings.
-    pages.each do |page|
-      page.search('.row').each do |listing|
-        # Skip listings from other regions in case there are any. ("FEW LOCAL RESULTS FOUND")
-        next if listing.search('a[href^=http]').length != 0
-        listing = Listing.new(self, region, listing)
-        car = Car.new(listing)
+  def searchregion(query, region)
+    # First time through is a fishing expedition.
+    getresultspage(query, region) do |document|
+      # If we have results process them.
+      if document.search('.resulttotal').length != 0
+        processresultspage(region, document)
 
-        # TODO: check for car/listing updates.
-        @listings[listing.id] = listing
-        @cars[listing.id] = car
+        # Calculate remaining pages.
+        remainingpagecount = (document.search('.resulttotal').first.content.gsub(/[^0-9]/,'').to_i / 100.0).ceil - 1
+        
+        # Make any additional requests necessary.
+        (1..remainingpagecount).each do |page|
+          getresultspage(query, region, page) { |document| processresultspage(region, document) }
+        end
       end
     end
   end
 
   def to_s
-    output = @listings.values.sort { |a,b|
-      if a.date == b.date
+    output = @postings.values.sort { |a,b|
+      if a.updated == b.updated
         b.id.to_i <=> a.id.to_i
       else
-        b.date <=> a.date
+        b.updated <=> a.updated
       end
     }
 
-    # TODO: Fix the JSON output.
     return output.to_json
   end
 
 end
 
 # TODO:
-# Automatically collate identical listings.
-# Capture the listing content and contact info.
-# Make paging use the thread pool.
-# Make getting the listing content use the thread pool.
-# Lexically parse the listing content to store information about the car itself.
+# Make all HTTP requests use a thread pool.
+# Automatically collate identical postings.
+# Lexically parse the posting content to store information about the car itself.

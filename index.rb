@@ -1,33 +1,50 @@
-require 'date'
-require 'json'
-require 'net/http'
+# Why?
+require 'rubygems'
+require 'bundler/setup'
+
+# New Toys
+require 'sinatra'
 require 'nokogiri'
+
+# Standard lib
+require 'uri'
+require 'json'
+require 'date'
+require 'net/http'
+
+# App specific
 require './ThreadPool'
 require './Continent'
 require './Region'
-require './Posting'
 require './Car'
+require './Posting'
 require './CLScanner'
 
-def haversine(lat1, long1, lat2, long2)
-  dtor = Math::PI/180
-  r = 3959
- 
-  rlat1 = lat1 * dtor
-  rlong1 = long1 * dtor
-  rlat2 = lat2 * dtor
-  rlong2 = long2 * dtor
- 
-  dlon = rlong1 - rlong2
-  dlat = rlat1 - rlat2
- 
-  a = Math::sin(dlat/2)**2 + Math::cos(rlat1) * Math::cos(rlat2) * Math::sin(dlon/2)**2
-  c = 2 * Math::atan2(Math::sqrt(a), Math::sqrt(1-a))
-  d = r * c
- 
-  return d
+scanner = CLScanner.new
+
+get '/' do
+  send_file 'index.html'
 end
 
-scanner = CLScanner.new 35.23308, -80.805521
-scanner.search("TDI", ["charlotte"], ["US"])
-puts scanner
+get '/regions' do
+  scanner.regions
+end
+
+get '/populate' do
+  query = params["q"] ? params["q"] : nil
+  regions = params["r"] ? params["r"].split(',') : nil
+  continents = params["c"] ? params["c"].split(',') : nil
+
+  scanner.populate(URI.escape(query), regions, continents)
+  "success"
+end
+
+get '/filter' do
+  query = params["q"] ? params["q"] : nil
+  regions = params["r"] ? params["r"].split(',') : nil
+  continents = params["c"] ? params["c"].split(',') : nil
+
+  # scanner.filter(URI.escape(query), regions, continents)
+  scanner.filter
+  
+end

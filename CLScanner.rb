@@ -1,21 +1,15 @@
 class CLScanner
   attr_accessor :pool
-  attr_reader :lat
-  attr_reader :lon
   
   Areas = URI('http://www.craigslist.org/about/areas.json')
   Sites = URI('http://www.craigslist.org/about/sites')
 
   # For bootstrapping.
-  def initialize(lat, lon)
+  def initialize
     @continents = {}
     @regions = {}
 
     @postings = {}
-    @cars = {}
-
-    @lat = lat
-    @lon = lon
 
     # Bootstrap the initial information we need for the scanner.
     @parsedsites = Nokogiri::HTML(Net::HTTP.get(Sites))
@@ -25,7 +19,6 @@ class CLScanner
 
     # Set up a thread pool.
     @pool = ThreadPool.new(64)
-    at_exit { @pool.shutdown }
   end
 
   def loadcontinents
@@ -39,7 +32,7 @@ class CLScanner
   def loadregions
     # Build the base with the geospatial file.
     @parsedareas.each do |json|
-      region = Region.new(self, json)
+      region = Region.new(json)
       @regions[region.id] = region
     end
 
@@ -55,7 +48,7 @@ class CLScanner
     end
   end
 
-  def search(query, regionswhitelist, continentswhitelist)
+  def populate(query, regionswhitelist, continentswhitelist)
     # Iterate over each region and push the processing for it into the processing queue.
     @regions.each do |hostname,region|
 
@@ -70,13 +63,14 @@ class CLScanner
   def getresultspage(query, region, page = 0)
     page = page * 100
     url = URI("http://#{region.id}.craigslist.org/search/cto?query=#{query}&srchType=T&s=#{page}")
-    yield Nokogiri::HTML(Net::HTTP.get(url))
-    # @pool.schedule do
-    #   puts "#{url} started by thread #{Thread.current[:id]}"
-    #   result = Nokogiri::HTML(Net::HTTP.get(url))
-    #   puts "#{url} finished by thread #{Thread.current[:id]}"
-    #   yield result
-    # end
+    
+    # yield Nokogiri::HTML(Net::HTTP.get(url))
+    @pool.schedule do
+      puts "#{url} started by thread #{Thread.current[:id]}"
+      result = Nokogiri::HTML(Net::HTTP.get(url))
+      puts "#{url} finished by thread #{Thread.current[:id]}"
+      yield result
+    end
   end
 
   def processresultspage(region, document)
@@ -84,11 +78,9 @@ class CLScanner
       # Skip postings from other regions in case there are any. ("FEW LOCAL RESULTS FOUND")
       next if posting.search('a[href^=http]').length != 0
       posting = Posting.new(self, region, posting)
-      car = Car.new(posting)
 
       # TODO: Run a diff on any change.
       @postings[posting.id] = posting
-      @cars[posting.id] = car
     end
   end
 
@@ -110,18 +102,22 @@ class CLScanner
     end
   end
 
-  def to_s
-    output = @postings.values.sort { |a,b|
-      if a.updated == b.updated
-        b.id.to_i <=> a.id.to_i
-      else
-        b.updated <=> a.updated
-      end
-    }
-
-    return output.to_json
+  def regions
+    return @regions.to_json
   end
 
+  def filter
+    # Filter through all stored results
+    # output = @postings.values.sort { |a,b|
+    #   begin
+    #     return a.updated == b.updated ? b.id.to_i <=> a.id.to_i : b.updated <=> a.updated
+    #   rescue
+    #     pp $!
+    #   end
+    # }
+    return @postings.to_json
+  end
+  
 end
 
 # TODO:

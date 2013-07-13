@@ -4,7 +4,8 @@ class Car
   def initialize(posting)
     @id = nil
     @postingid = posting.id
-    @year = findyear(posting.description)
+    @year = findyear(posting.title)
+    @mileage = nil
     
     # TODO: condition, mileage, features, color(s)...
   end
@@ -25,6 +26,19 @@ class Car
     end
     
     year
+  end
+
+  def to_s
+    self.to_json
+  end
+  
+  def to_json(ignore)
+    hash = {}
+    self.instance_variables.each do |key|
+      next if ["@id","@postingid"].include? key.to_s
+      hash[key.to_s[1..-1]] = self.instance_variable_get key
+    end
+    hash.to_json
   end
 
 end

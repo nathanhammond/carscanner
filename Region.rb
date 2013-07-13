@@ -1,15 +1,12 @@
 class Region
   attr_accessor :continent
-  attr_reader :distance
 
-  def initialize(scanner, json)
+  def initialize(json)
     json.each do |key,value|
       if ["name","hostname","region","country","lat","lon"].include? key
         instance_variable_set("@#{key}", value)
       end
     end
-
-    @distance = haversine(scanner.lat, scanner.lon, @lat, @lon)
   end
 
   def reup(continent, regionname)
@@ -22,6 +19,16 @@ class Region
   end
   
   def to_s
-    @name
+    self.to_json
   end
+  
+  def to_json(ignore)
+    hash = {}
+    self.instance_variables.each do |key|
+      # next if ["@id","@postingid"].include? key.to_s
+      hash[key.to_s[1..-1]] = self.instance_variable_get key
+    end
+    hash.to_json
+  end
+
 end

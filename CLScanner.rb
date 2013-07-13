@@ -1,4 +1,5 @@
 class CLScanner
+  attr_accessor :pool
   attr_reader :lat
   attr_reader :lon
   
@@ -70,6 +71,12 @@ class CLScanner
     page = page * 100
     url = URI("http://#{region.id}.craigslist.org/search/cto?query=#{query}&srchType=T&s=#{page}")
     yield Nokogiri::HTML(Net::HTTP.get(url))
+    # @pool.schedule do
+    #   puts "#{url} started by thread #{Thread.current[:id]}"
+    #   result = Nokogiri::HTML(Net::HTTP.get(url))
+    #   puts "#{url} finished by thread #{Thread.current[:id]}"
+    #   yield result
+    # end
   end
 
   def processresultspage(region, document)
@@ -119,5 +126,6 @@ end
 
 # TODO:
 # Make all HTTP requests use a thread pool.
+# Provide a user interface.
 # Automatically collate identical postings.
 # Lexically parse the posting content to store information about the car itself.

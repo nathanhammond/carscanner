@@ -17,22 +17,33 @@ class Posting
     @distance = @lat && @lon ? haversine(scanner.lat, scanner.lon, @lat, @lon) : region.distance
     
     # Get the contents of the posting.
-    document = Nokogiri::HTML(Net::HTTP.get(@link))
-    @body = document.search('#postingbody').first.content
+    getpostingpage(scanner) do |document|
+      @body = document.search('#postingbody').first.content
 
-    dates = document.search('.userbody date')
-    @created = DateTime.parse(dates.first.content)
-    @updated = DateTime.parse(dates.last.content)
+      dates = document.search('.userbody date')
+      @created = DateTime.parse(dates.first.content)
+      @updated = DateTime.parse(dates.last.content)
     
-    @images = []    
-    imagelinks = document.search('#thumbs > a')
-    if imagelinks.length != 0
-      imagelinks.each { |imagelink| @images.push(imagelink.attr('href')) }
+      @images = []
+      imagelinks = document.search('#thumbs > a')
+      if imagelinks.length != 0
+        imagelinks.each { |imagelink| @images.push(imagelink.attr('href')) }
+      end
+    
+      @email = document.search('a[href^=mailto]').length == 1 ? document.search('a[href^=mailto]').attr('href') : nil
     end
     
-    @email = document.search('a[href^=mailto]').length == 1 ? document.search('a[href^=mailto]').attr('href') : nil
-    
     # TODO: Parse emails and/or phone numbers out of the posting.
+  end
+
+  def getpostingpage(scanner)
+    yield Nokogiri::HTML(Net::HTTP.get(@link))
+    # scanner.pool.schedule do
+    #   puts "#{@link} started by thread #{Thread.current[:id]}"
+    #   result = Nokogiri::HTML(Net::HTTP.get(@link))
+    #   puts "#{@link} finished by thread #{Thread.current[:id]}"
+    #   yield result
+    # end
   end
 
   # TODO: Fix JSON output.

@@ -49,6 +49,9 @@ class CLScanner
   end
 
   def populate(query, regionswhitelist, continentswhitelist)
+    # A default filter.
+    query << URI.escape(" -wtb -wanted");
+
     # Iterate over each region and push the processing for it into the processing queue.
     @regions.each do |hostname,region|
 
@@ -108,13 +111,9 @@ class CLScanner
 
   def filter
     # Filter through all stored results
-    # output = @postings.values.sort { |a,b|
-    #   begin
-    #     return a.updated == b.updated ? b.id.to_i <=> a.id.to_i : b.updated <=> a.updated
-    #   rescue
-    #     pp $!
-    #   end
-    # }
+    output = @postings.values.sort { |a,b|
+      return a.updated == b.updated ? b.id.to_i <=> a.id.to_i : b.updated <=> a.updated
+    }
     return @postings.to_json
   end
   

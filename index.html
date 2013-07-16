@@ -1,19 +1,75 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
 <script src="http://builds.emberjs.com/handlebars-1.0.0-rc.4.js"></script>
 <script src="http://builds.emberjs.com/ember-1.0.0-rc.6.min.js"></script>
-<script src="search.js?q=TDI&amp;r=charlotte&amp;continent=US"></script>
-<body>asdf</body>
+<body>
+	<header>
+		<form>
+			<label for="">Cost Above</label>
+				<input type="text">
+			<label for="">Cost Below</label>
+				<input type="text">
+			<label for="">Model Year From</label>
+				<input type="text">
+			<label for="">Model Year To</label>
+				<input type="text">
+			<label for="">Distance less than</label>
+				<input type="text">
+			<label for="">In State</label>
+				<input type="checkbox">
+			<label for="">Filter Description</label>
+				<input type="text">
+		</form>
+	</header>
+	<main>Please wait, loading...</main>
+</body>
 <script>
-/* Process the results. */
-for (var i = 0; i < postings.length; i++) {
-	postings[i].hasupdated = postings[i].created == postings[i].updated
-	postings[i].created = new Date(postings[i].created);
-	postings[i].updated = new Date(postings[i].updated);
+function haversine(lat1, lon1, lat2, lon2) {
+	var R = 3959;
 
-	postings[i].createdpretty = (postings[i].created.getMonth()+1)+'/'+(postings[i].created.getDate());
-	postings[i].updatedpretty = (postings[i].updated.getMonth()+1)+'/'+(postings[i].updated.getDate());
+	lat1 = lat1 * Math.PI / 180;
+	lat2 = lat2 * Math.PI / 180;
+	lon1 = lon1 * Math.PI / 180;
+	lon2 = lon2 * Math.PI / 180;
 
+	var dLat = (lat2-lat1);
+	var dLon = (lon2-lon1);
+
+	var a = Math.pow(Math.sin(dLat/2),2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dLon/2),2);
+	var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+	var d = R * c;
+
+	return d;
 }
-var template = Handlebars.compile('<table><thead><tr><th>ID</th><th>Created</th><th>Updated</th><th>Link</th><th>Year</th><th>Cost</th><th>CL Region</th><th>Location</th></tr></thead><tbody>{{#each cars}}<tr><td>{{id}}</td><td>{{createdpretty}}</td><td>{{updatedpretty}}</td><td><a href="{{link}}">{{title}}</a></td><td>{{car.year}}</td><td>{{price}}</td><td>{{regionid}}</td><td>{{location}}</td></tr>{{/each}}</tbody></table>');
-document.body.innerHTML = template({ cars: postings });
+
+var months = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+navigator.geolocation.getCurrentPosition(function(position) {
+	var latitude = position.coords.latitude;
+	var longitude = position.coords.longitude;
+
+	$.when($.get('/filter'), $.get('/regions')).then(function(postings, regions) {
+		postings = JSON.parse(postings[0]);
+		regions = JSON.parse(regions[0]);
+
+		for (var i in postings) {
+			/* Processing. */
+			postings[i].created = new Date(postings[i].created);
+			postings[i].updated = new Date(postings[i].updated);
+			postinglat = postings[i].lat ? postings[i].lat : regions[postings[i].regionid].lat;
+			postinglon = postings[i].lon ? postings[i].lon : regions[postings[i].regionid].lon;
+
+			/* Calculated attributes. */
+			postings[i].createdpretty = months[postings[i].created.getMonth()]+' '+(postings[i].created.getDate());
+			postings[i].updatedpretty = months[postings[i].updated.getMonth()]+' '+(postings[i].updated.getDate());
+			postings[i].distance = Math.round(haversine(latitude, longitude, postinglat, postinglon));
+			postings[i].regionname = regions[postings[i].regionid].name;
+			postings[i].state = regions[postings[i].regionid].regionname;
+		}
+
+		var template = Handlebars.compile('<table><thead><tr><th>ID</th><th>Created</th><th>Updated</th><th>Link</th><th>Year</th><th>Cost</th><th>CL Region</th><th>State</th><th>Distance</th><th>Location</th></tr></thead><tbody>{{#each cars}}<tr><td>{{id}}</td><td>{{createdpretty}}</td><td>{{updatedpretty}}</td><td><a href="{{link}}">{{title}}</a></td><td>{{car.year}}</td><td>{{price}}</td><td>{{regionname}}</td><td>{{state}}</td><td>{{distance}}</td><td>{{location}}</td></tr>{{/each}}</tbody></table>');
+		document.getElementsByTagName('main')[0].innerHTML = template({ cars: postings });
+	});
+
+});
+
 </script>

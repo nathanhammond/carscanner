@@ -25,7 +25,6 @@ class Region
   def to_json(ignore)
     hash = {}
     self.instance_variables.each do |key|
-      # next if ["@id","@postingid"].include? key.to_s
       hash[key.to_s[1..-1]] = self.instance_variable_get key
     end
     hash.to_json

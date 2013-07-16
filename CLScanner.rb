@@ -12,7 +12,7 @@ class CLScanner
     @postings = {}
 
     # Bootstrap the initial information we need for the scanner.
-    @parsedsites = Nokogiri::HTML(Net::HTTP.get(Sites))
+    @parsedsites = Nokogiri::HTML(Net::HTTP.get(Sites), nil, "UTF-8")
     @parsedareas = JSON.parse(Net::HTTP.get(Areas))
     loadcontinents
     loadregions
@@ -67,7 +67,7 @@ class CLScanner
     # yield Nokogiri::HTML(Net::HTTP.get(url))
     @pool.schedule do
       puts "#{url} started by thread #{Thread.current[:id]}"
-      result = Nokogiri::HTML(Net::HTTP.get(url))
+      result = Nokogiri::HTML(Net::HTTP.get(url), nil, "UTF-8")
       puts "#{url} finished by thread #{Thread.current[:id]}"
       yield result
     end

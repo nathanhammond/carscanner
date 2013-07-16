@@ -53,7 +53,7 @@ class Posting
     # yield Nokogiri::HTML(Net::HTTP.get(@link))
     scanner.pool.schedule do
       puts "#{@link} started by thread #{Thread.current[:id]}"
-      result = Nokogiri::HTML(Net::HTTP.get(@link))
+      result = Nokogiri::HTML(Net::HTTP.get(@link), nil, "UTF-8")
       puts "#{@link} finished by thread #{Thread.current[:id]}"
       yield result
     end

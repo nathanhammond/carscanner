@@ -1,5 +1,8 @@
 class Region
   attr_accessor :continent
+  attr_accessor :name
+  attr_accessor :region
+  attr_accessor :regionname
 
   def initialize(json)
     json.each do |key,value|

@@ -23,6 +23,7 @@ require './CLScanner'
 scanner = CLScanner.new
 
 get '/' do
+  # Store some information about the request
   send_file 'index.html'
 end
 

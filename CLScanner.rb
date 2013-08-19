@@ -69,9 +69,9 @@ class CLScanner
     
     # yield Nokogiri::HTML(Net::HTTP.get(url))
     @pool.schedule do
-      puts "#{url} started by thread #{Thread.current[:id]}"
+      # puts "#{url} started by thread #{Thread.current[:id]}"
       result = Nokogiri::HTML(Net::HTTP.get(url), nil, "UTF-8")
-      puts "#{url} finished by thread #{Thread.current[:id]}"
+      # puts "#{url} finished by thread #{Thread.current[:id]}"
       yield result
     end
   end
@@ -112,9 +112,16 @@ class CLScanner
   def filter
     # Filter through all stored results
     output = @postings.values.sort { |a,b|
-      return a.updated == b.updated ? b.id.to_i <=> a.id.to_i : b.updated <=> a.updated
+      b.updated == a.updated ? b.id <=> a.id : b.updated <=> a.updated
     }
-    return @postings.to_json
+
+    result = Hash.new
+
+    output.each { |posting|
+      result[posting.id] = posting
+    }
+
+    return result.to_json
   end
   
 end

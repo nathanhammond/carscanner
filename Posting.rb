@@ -2,6 +2,7 @@ class Posting
   attr_reader :id
   attr_reader :updated
   attr_reader :title
+  attr_reader :body
   attr_reader :car
 
   def initialize(scanner, region, domelement)
@@ -13,7 +14,15 @@ class Posting
     @link = domelement.search(".pl > a").length == 1 ? URI("http://#{@regionid}.craigslist.org" + domelement.search(".pl > a").first.attr('href')) : nil
     @title = domelement.search(".pl > a").length == 1 ? domelement.search(".pl > a").first.content : nil
     @price = domelement.search("span.price").length == 1 ? domelement.search("span.price").first.content : nil
-    @location = domelement.search(".l2 small").length == 1 ? domelement.search(".l2 small").first.content.gsub(/[\(\)]/,'').strip : nil
+    @location = domelement.search(".l2 small").length == 1 ? domelement.search(".l2 small").first.content.strip : nil
+    unless @location.nil?
+      while @location.match(/^\((.*)\)$/) do
+        @location = @location.gsub(/^\((.*)\)$/,'\1').strip
+      end
+      @location = @location.gsub(/[\,\.]{0,1}[\s]*#{region.region}$/i,'').strip
+      @location = @location.gsub(/[\,\.]{0,1}[\s]*#{region.regionname}$/i,'').strip
+      @location = @location.capitalize
+    end
     @lat = domelement["data-latitude"] ? domelement["data-latitude"].to_f : nil
     @lon = domelement["data-longitude"] ? domelement["data-longitude"].to_f : nil
     @body = nil
@@ -21,6 +30,7 @@ class Posting
     @updated = nil
     @images = []
     @email = nil
+    @emailaddress = nil
     
     # Get the contents of the posting.
     getpostingpage(scanner) do |document|
@@ -40,6 +50,7 @@ class Posting
         end
 
         @email = document.search('a[href^=mailto]').length == 1 ? document.search('a[href^=mailto]').attr('href') : nil
+        @emailaddress = document.search('a[href^=mailto]').length == 1 ? document.search('a[href^=mailto]').first.content : nil
       end
     end
     
@@ -52,15 +63,15 @@ class Posting
   def getpostingpage(scanner)
     # yield Nokogiri::HTML(Net::HTTP.get(@link))
     scanner.pool.schedule do
-      puts "#{@link} started by thread #{Thread.current[:id]}"
+      # puts "#{@link} started by thread #{Thread.current[:id]}"
       result = Nokogiri::HTML(Net::HTTP.get(@link), nil, "UTF-8")
-      puts "#{@link} finished by thread #{Thread.current[:id]}"
+      # puts "#{@link} finished by thread #{Thread.current[:id]}"
       yield result
     end
   end
 
   def to_s
-    self.to_json
+    self.to_json(nil)
   end
   
   def to_json(ignore)
